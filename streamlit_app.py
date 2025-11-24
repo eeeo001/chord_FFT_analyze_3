@@ -233,28 +233,33 @@ st.markdown("### Fourier Transform 기반 오디오 화음 자동 분석기")
 st.header("1. 마이크 녹음으로 분석")
 
 # 녹음 컴포넌트 생성. 녹음된 wav 바이트 데이터를 반환합니다.
-wav_audio_data = audiorecorder("녹음 시작", "녹음 중지") 
+wav_audio_data = audiorecorder("녹음 시작", "녹음 중지")
 
-if wav_audio_data is not None:
+# 데이터가 존재하고 길이도 0이 아닐 때만 처리
+if wav_audio_data is not None and len(wav_audio_data) > 0:
+
     st.info("녹음된 오디오 파일이 감지되었습니다. 분석을 시작합니다...")
-    
+
     try:
         # 1. WAV 바이트 데이터를 pydub의 AudioSegment로 변환
         audio_segment = AudioSegment.from_wav(io.BytesIO(wav_audio_data))
-        
+
         # 2. AudioSegment를 numpy 배열로 변환
         y = np.array(audio_segment.get_array_of_samples()).astype(np.float32)
-        sr = audio_segment.frame_rate # 녹음된 파일의 샘플링 레이트 사용
+        sr = audio_segment.frame_rate  # 녹음된 파일의 샘플링 레이트 사용
 
         # 오디오 신호의 볼륨 정규화 (선택 사항)
         if np.max(np.abs(y)) > 0:
-            y /= np.max(np.abs(y)) 
-        
+            y /= np.max(np.abs(y))
+
         # 3. 분석 실행
         run_analysis(y, sr, "녹음된 오디오")
-        
+
     except Exception as e:
         st.error(f"녹음 파일 처리 중 오류가 발생했습니다: {e}")
+
+else:
+    st.write("아직 녹음된 오디오가 없습니다.")
 
 
 # ----------------------------------------------------------------------
