@@ -225,20 +225,20 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
 # (2) Streamlit web page settings
 st.set_page_config(layout="wide")
 st.title("FFT-based Chord Analyzer")
-st.markdown("### Fourier Transform 기반 오디오 화음 자동 분석기")
+st.markdown("Analyze chords using the Fourier Transform.")
 
 # ----------------------------------------------------------------------
 # 1. 마이크 녹음 섹션
 # ----------------------------------------------------------------------
-st.header("1. 마이크 녹음으로 분석")
+st.header("1. Analyze with Microphone")
 
 # 녹음 컴포넌트 생성. 녹음된 wav 바이트 데이터를 반환합니다.
-wav_audio_data = audiorecorder("녹음 시작", "녹음 중지")
+wav_audio_data = audiorecorder("record", "stop")
 
 # 데이터가 존재하고 길이도 0이 아닐 때만 처리
 if wav_audio_data is not None and len(wav_audio_data) > 0:
 
-    st.info("녹음된 오디오 파일이 감지되었습니다. 분석을 시작합니다...")
+    st.info("Audio detected. Starting analysis...")
 
     try:
         # 1. WAV 바이트 데이터를 pydub의 AudioSegment로 변환
@@ -253,25 +253,25 @@ if wav_audio_data is not None and len(wav_audio_data) > 0:
             y /= np.max(np.abs(y))
 
         # 3. 분석 실행
-        run_analysis(y, sr, "녹음된 오디오")
+        run_analysis(y, sr, "recorded audio")
 
     except Exception as e:
-        st.error(f"녹음 파일 처리 중 오류가 발생했습니다: {e}")
+        st.error(f"Failed to process the recorded audio.: {e}")
 
 else:
-    st.write("아직 녹음된 오디오가 없습니다.")
+    st.write("No audio has been recorded yet.")
 
 
 # ----------------------------------------------------------------------
 # 2. 파일 업로드 섹션
 # ----------------------------------------------------------------------
-st.header("2. 파일 업로드로 분석")
+st.header("2. Analyze from File Upload")
 
 # (3) file uploader widget
 uploaded_file = st.file_uploader("분석할 오디오 파일 (WAV, MP3 권장)", type=['wav', 'mp3'], key='uploader')
 
 if uploaded_file is not None:
-    st.info("업로드된 파일이 감지되었습니다. 분석을 시작합니다...")
+    st.info("File detected. Starting analysis...")
 
     # Run analysis logic only if the file is successfully loaded.
     try:
@@ -288,4 +288,4 @@ if uploaded_file is not None:
 else:
     # File Upload Pending (only show if no recording is done)
     if wav_audio_data is None:
-        st.info("마이크로 녹음하거나 파일을 업로드하여 분석을 시작하세요.")
+        st.info("Record audio or upload a file to start the analysis.")
