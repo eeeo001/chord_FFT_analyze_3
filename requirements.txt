@@ -1,0 +1,8 @@
+streamlit
+librosa
+numpy
+matplotlib
+scipy
+pandas
+pydub
+streamlit-audiorecorder
