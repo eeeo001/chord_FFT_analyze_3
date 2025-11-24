@@ -233,7 +233,7 @@ st.markdown("### Fourier Transform 기반 오디오 화음 자동 분석기")
 st.header("1. 마이크 녹음으로 분석")
 
 # 녹음 컴포넌트 생성. 녹음된 wav 바이트 데이터를 반환합니다.
-wav_audio_data = st_audiorecorder(start_text="녹음 시작", stop_text="녹음 중지", decode_audio=False, key='recorder') 
+wav_audio_data = audiorecorder(start_text="녹음 시작", stop_text="녹음 중지", decode_audio=False, key='recorder') 
 
 if wav_audio_data is not None:
     st.info("녹음된 오디오 파일이 감지되었습니다. 분석을 시작합니다...")
