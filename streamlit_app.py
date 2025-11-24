@@ -8,7 +8,7 @@ from collections import defaultdict
 import io
 from pydub import AudioSegment
 # 녹음 기능을 위한 라이브러리 추가
-from st_audiorecorder import st_audiorecorder 
+import streamlit_audiorecorder as audiorec
 
 
 # Define constants
