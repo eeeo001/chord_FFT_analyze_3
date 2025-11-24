@@ -112,7 +112,7 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
     xf_positive = xf[:half_n] # Positive Frequencies
     yf_positive = np.abs(yf[:half_n]) # Magnitude (Amplitude Spectrum)
     
-    st.subheader("주파수 스펙트럼 시각화")
+    st.subheader("frequency spectrum visualization")
     
     # --- 5. Visualize Spectrum ---
     fig, ax = plt.subplots(figsize=(10, 4))
@@ -167,8 +167,8 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
     fundamental_frequencies = [f for f, m in filtered_fundamentals]
     fundamental_midi_notes = [freq_to_midi(f) for f in fundamental_frequencies if f >= MIN_FREQ_HZ]
 
-    st.subheader("근음 주파수 분석 결과")
-    st.markdown(f"**식별된 근음 주파수 (Hz):** `{np.round(fundamental_frequencies, 2)}`")
+    st.subheader("Fundamental Frequency Analysis")
+    st.markdown(f"**Detected Fundamental Frequencies (Hz):** `{np.round(fundamental_frequencies, 2)}`")
     
     # ----------------------------------------------------------------------
     # --- 7. Chord Identification (Optimized for up to 7 Notes) ---
@@ -211,11 +211,11 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
         recommended_chords = get_recommended_chords(best_root_midi, best_chord_type)
         
         if recommended_chords:
-            st.subheader("이 화음과 어울리는 추천 코드")
+            st.subheader("Recommended chords")
             st.markdown(", ".join(recommended_chords))
 
     else:
-        st.error("화음을 식별하지 못했습니다. 단일 화음 연주 후 다시 시도해 주세요.")
+        st.error("Chord identification failed. Please try again with a single chord.")
 
 
 # ----------------------------------------------------------------------
@@ -236,7 +236,7 @@ st.header("1. Analyze with Microphone")
 wav_audio_data = audiorecorder("record", "stop")
 
 # 데이터가 존재하고 길이도 0이 아닐 때만 처리
-if wav_audio_data is not None and len(wav_audio_data) > 0:
+if wav_audio_data is not None and len(wav_audio_data) > 5000:
 
     st.info("Audio detected. Starting analysis...")
 
@@ -268,7 +268,7 @@ else:
 st.header("2. Analyze from File Upload")
 
 # (3) file uploader widget
-uploaded_file = st.file_uploader("분석할 오디오 파일 (WAV, MP3 권장)", type=['wav', 'mp3'], key='uploader')
+uploaded_file = st.file_uploader("Select an Audio File (WAV, MP3 recommended)", type=['wav', 'mp3'], key='uploader')
 
 if uploaded_file is not None:
     st.info("File detected. Starting analysis...")
