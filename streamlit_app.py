@@ -212,18 +212,7 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
         
         if recommended_chords:
             st.subheader("Recommended chords")
-
-            formatted_list = []
-            for chord in recommended_chords:
-                # chord 예시: "G Dominant 7th (V7)"
-                chord_name = chord.split("(")[0].strip()
-                chord_type = " ".join(chord_name.split(" ")[1:])
-                root_name = chord_name.split(" ")[0]
-                root_index = note_names.index(root_name)
-                interval_string = get_chord_interval_string(root_index, chord_type)
-                formatted_list.append(f"**{chord}** {interval_string}")
-
-            st.markdown("\n\n".join(formatted_list))
+            st.markdown(", ".join(recommended_chords))
 
     else:
         st.error("Chord identification failed. Please try again with a single chord.")
