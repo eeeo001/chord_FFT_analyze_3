@@ -7,7 +7,7 @@ from scipy.signal import find_peaks
 from collections import defaultdict
 import io
 from pydub import AudioSegment
-# 녹음 기능을 위한 라이브러리 추가 (audiorecorder 사용)
+# 녹음 기능을 위한 라이브러리 추가
 from audiorecorder import audiorecorder
 
 
@@ -61,77 +61,72 @@ def freq_to_midi(frequency):
     midi_note = 69 + 12 * np.log2(frequency / 440.0)
     return int(max(0, min(127, round(midi_note))))
 
-# (2) Helper function to get notes of a chord
+# (2) Helper function to get notes of a chord (유지)
 def get_notes_string(root_index, chord_type):
-    """Returns the note intervals that make up a chord for a given root and chord type."""
-    if chord_type in chord_templates:
-        template = chord_templates[chord_type]
-        # 루트 + 템플릿 인터벌을 12로 나눈 나머지 (옥타브 무시)
+    """주어진 루트와 화음 타입에 대한 구성 음정(노트) 문자열을 반환합니다."""
+    # 화음 템플릿이 없는 경우, 가장 가까운 Triad(Major, Minor) 템플릿을 사용
+    # V7은 Dominant 7th 템플릿 사용
+    if 'Dominant' in chord_type:
+        type_key = 'Dominant 7th'
+    elif 'Major' in chord_type:
+        type_key = 'Major'
+    elif 'Minor' in chord_type:
+        type_key = 'Minor'
+    else:
+        # 안전장치
+        return "" 
+
+    if type_key in chord_templates:
+        template = chord_templates[type_key]
         notes_indices = [(root_index + interval) % 12 for interval in template]
-        # 인덱스를 노트 이름으로 변환
         notes_names = [note_names[idx] for idx in notes_indices]
         return f" (`{', '.join(notes_names)}`)"
     return ""
 
 
-# (3) Chord Recommendation Logic (추천 코드 로직)
+# (3) Chord Recommendation Logic (추천 코드 로직 - 유지)
 def get_recommended_chords(root_midi_index, chord_type):
     recommended = []
     
-    # 1. Tonic (I/i) 코드일 때 (Major, Minor, 7th, 9th, 11th, 13th 모두 해당)
+    # 1. Tonic (I/i) 코드일 때 
     if 'Major' in chord_type or 'Minor' in chord_type:
         
-        # V7 (Dominant) 코드 추천: 루트에서 +7
         dominant_root = (root_midi_index + 7) % 12
         dominant_name = note_names[dominant_root]
-        # *********** 수정된 부분: 구성 음정 추가 ***********
         notes = get_notes_string(dominant_root, 'Dominant 7th')
         recommended.append(f"{dominant_name} Dominant 7th (V7){notes}")
         
-        # IV (Subdominant) 코드 추천: 루트에서 +5
         subdominant_root = (root_midi_index + 5) % 12
         subdominant_name = note_names[subdominant_root]
-        # *********** 수정된 부분: 구성 음정 추가 ***********
         notes = get_notes_string(subdominant_root, 'Major')
         recommended.append(f"{subdominant_name} Major (IV){notes}")
         
-        # vi (Relative Minor/Tonic Substitute) 코드 추천: 루트에서 +9
         relative_minor_root = (root_midi_index + 9) % 12
         relative_minor_name = note_names[relative_minor_root]
-        # *********** 수정된 부분: 구성 음정 추가 ***********
         notes = get_notes_string(relative_minor_root, 'Minor')
         recommended.append(f"{relative_minor_name} Minor (vi){notes}")
 
     # 2. Dominant (V7, V9, V11, V13) 코드일 때
     elif 'Dominant' in chord_type:
-        # I (Tonic) 코드 추천: 루트에서 -7 (해결)
         tonic_root = (root_midi_index - 7 + 12) % 12
         tonic_name = note_names[tonic_root]
-        # *********** 수정된 부분: 구성 음정 추가 ***********
         notes = get_notes_string(tonic_root, 'Major')
         recommended.append(f"{tonic_name} Major (I){notes}")
         
-        # ii (Minor Subdominant) 코드 추천: I에서 +2
         subdominant_root = (tonic_root + 2) % 12
         subdominant_name = note_names[subdominant_root]
-        # *********** 수정된 부분: 구성 음정 추가 ***********
         notes = get_notes_string(subdominant_root, 'Minor')
         recommended.append(f"{subdominant_name} Minor (ii){notes}")
     
     return list(set(recommended))[:4]
 
 
-# (4) Core Analysis Function
+# (4) Core Analysis Function (분석 로직은 그대로, UI 요소만 제거)
 def run_analysis(y, sr, source_name="Uploaded Audio"):
-    # --- 파일 정보 표시 ---
-    st.success("File successfully loaded")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Sampling rate (sr)", f"{sr} Hz")
-    with col2:
-        st.metric("Length", f"{len(y)/sr:.2f} 초")
-        
+    
+    # ----------------------------------------------------------------------
     # --- 4. Perform FFT and Calculate Spectrum ---
+    # ----------------------------------------------------------------------
     N = len(y)
     yf = fft(y)
     xf = fftfreq(N, 1/sr)
@@ -140,7 +135,7 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
     xf_positive = xf[:half_n] # Positive Frequencies
     yf_positive = np.abs(yf[:half_n]) # Magnitude (Amplitude Spectrum)
     
-    st.subheader("Frequency spectrum visualization")
+    st.subheader("Frequency spectruem visualization")
     
     # --- 5. Visualize Spectrum ---
     fig, ax = plt.subplots(figsize=(10, 4))
@@ -152,7 +147,9 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
     ax.grid(True)
     st.pyplot(fig)
 
+    # ----------------------------------------------------------------------
     # --- 6. Peak Identification and Harmonic Filtering (Core Logic) ---
+    # ----------------------------------------------------------------------
     
     # 6-1. Initial Peak Identification
     magnitude_threshold = np.max(yf_positive) * 0.05
@@ -219,15 +216,15 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
         root_name = note_names[best_root_midi]
         identified_chord = f"**{root_name} {best_chord_type}**"
     
-        st.markdown(f"## Identified Chord: {identified_chord}")
+        st.markdown(f"## Identified chord: {identified_chord}")
         st.info(f"Chord confidence (maximum {len(chord_templates['Major 13th'])}점): {best_match_score}")
         
         # 코드 추천 기능 호출 및 출력
         recommended_chords = get_recommended_chords(best_root_midi, best_chord_type)
         
         if recommended_chords:
-            st.subheader("Suggested compatible chords")
-            # *********** 수정된 부분: 줄 바꿈 출력 ***********
+            st.subheader("Suggested compatible chords
+            # 요청하신 대로 줄 바꿈 출력 포맷 유지
             formatted_list = "\n".join([f"* {chord}" for chord in recommended_chords])
             st.markdown(formatted_list)
 
