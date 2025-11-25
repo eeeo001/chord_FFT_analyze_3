@@ -223,7 +223,7 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
         recommended_chords = get_recommended_chords(best_root_midi, best_chord_type)
         
         if recommended_chords:
-            st.subheader("Suggested compatible chords
+            st.subheader("Suggested compatible chords")
             # 요청하신 대로 줄 바꿈 출력 포맷 유지
             formatted_list = "\n".join([f"* {chord}" for chord in recommended_chords])
             st.markdown(formatted_list)
