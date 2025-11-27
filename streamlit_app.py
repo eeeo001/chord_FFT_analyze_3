@@ -7,8 +7,9 @@ from scipy.signal import find_peaks
 from collections import defaultdict
 import io
 from pydub import AudioSegment
-# 녹음 기능을 위한 라이브러리 추가
-from audiorecorder import audiorecorder
+# 녹음 기능을 위한 라이브러리 추가 (pip install audiorecorder pydub)
+from audiorecorder import audiorecorder 
+# Note: pydub requires FFmpeg to be installed on the system.
 
 
 # Define constants
@@ -21,6 +22,7 @@ MAX_HARMONIC_N = 8 # Maximum harmonic check range
 note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
 # Chord Templates (Optimized for up to 7 Notes)
+# 템플릿의 길이가 길수록, 실제 관찰된 음이 부족할 때 정규화 점수가 낮아짐.
 chord_templates = {
     # 7음 화음 (7 Notes) - 13th: [1, 3, 5, 7, 9, 11, 13]
     'Major 13th': [0, 4, 7, 11, 2, 5, 9], 
@@ -60,6 +62,15 @@ def freq_to_midi(frequency):
         return -1
     midi_note = 69 + 12 * np.log2(frequency / 440.0)
     return int(max(0, min(127, round(midi_note))))
+
+# (1-2) 화음의 구성음을 문자열로 반환하는 함수
+def get_chord_interval_string(root_index, chord_type):
+    template = chord_templates.get(chord_type)
+    if not template:
+        return ""
+    
+    notes = [note_names[(root_index + interval) % 12] for interval in template]
+    return f"({', '.join(notes)})"
 
 
 # (2) Chord Recommendation Logic (추천 코드 로직)
@@ -101,6 +112,14 @@ def get_recommended_chords(root_midi_index, chord_type):
 
 # (3) Core Analysis Function (기존 코드를 함수로 통합)
 def run_analysis(y, sr, source_name="Uploaded Audio"):
+    # --- Display File Information ---
+    st.success("File successfully loaded!")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Sampling Rate (sr)", f"{sr} Hz")
+    with col2:
+        st.metric("Duration", f"{len(y)/sr:.2f} seconds")
+
     # ----------------------------------------------------------------------
     # --- 4. Perform FFT and Calculate Spectrum ---
     # ----------------------------------------------------------------------
@@ -112,7 +131,7 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
     xf_positive = xf[:half_n] # Positive Frequencies
     yf_positive = np.abs(yf[:half_n]) # Magnitude (Amplitude Spectrum)
     
-    st.subheader("frequency spectrum visualization")
+    st.subheader("Frequency Spectrum Visualization")
     
     # --- 5. Visualize Spectrum ---
     fig, ax = plt.subplots(figsize=(10, 4))
@@ -123,6 +142,7 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
     ax.set_xlim([MIN_FREQ_HZ, MAX_FREQ_HZ]) # Musical Frequency Range
     ax.grid(True)
     st.pyplot(fig)
+    # 
 
     # ----------------------------------------------------------------------
     # --- 6. Peak Identification and Harmonic Filtering (Core Logic) ---
@@ -131,9 +151,10 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
     # 6-1. Initial Peak Identification
     magnitude_threshold = np.max(yf_positive) * 0.05
     
+    # Prominence 조건 강화 (음성 신호의 노이즈/고조파 필터링 강화)
     peak_indices, properties = find_peaks(yf_positive, 
-                                        height=magnitude_threshold, 
-                                        prominence=magnitude_threshold*0.2)
+                                         height=magnitude_threshold, 
+                                         prominence=magnitude_threshold * 0.3) # Prominence 임계값 상향 조정
     
     # Filter peaks to the musical range
     valid_indices = [i for i in peak_indices if MIN_FREQ_HZ <= xf_positive[i] <= MAX_FREQ_HZ]
@@ -141,17 +162,20 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
     peak_magnitudes = yf_positive[valid_indices]
 
     # 6-2. Harmonic Filtering (Correcting Fundamental vs. Harmonic confusion)
+    # 진폭이 큰 순서대로 정렬 (가장 큰 피크부터 근음 후보로 검사)
     initial_sorted_peaks = sorted(zip(peak_frequencies, peak_magnitudes), key=lambda x: x[1], reverse=True)
     filtered_fundamentals = []
     
     for freq, mag in initial_sorted_peaks:
         is_harmonic = False
         
-        # Check if the current peak is a harmonic of an already identified, lower fundamental
+        # 이미 식별된 근음의 하모닉인지 확인
         for existing_freq, _ in filtered_fundamentals:
+            # 2차부터 MAX_HARMONIC_N차까지 하모닉 체크
             for n in range(2, MAX_HARMONIC_N + 1):
                 expected_harmonic_freq = existing_freq * n
                 
+                # 상대적 오차 TOLERANCE 내에 있는지 확인
                 if abs(freq - expected_harmonic_freq) / expected_harmonic_freq < TOLERANCE:
                     is_harmonic = True
                     break
@@ -159,7 +183,7 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
                 break
         
         if not is_harmonic:
-            # Add as fundamental if the peak is not identified as a harmonic.
+            # 하모닉이 아니면 근음으로 추가
             filtered_fundamentals.append((freq, mag))
 
     # --- Final Fundamental List Creation ---
@@ -171,14 +195,15 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
     st.markdown(f"**Detected Fundamental Frequencies (Hz):** `{np.round(fundamental_frequencies, 2)}`")
     
     # ----------------------------------------------------------------------
-    # --- 7. Chord Identification (Optimized for up to 7 Notes) ---
+    # --- 7. Chord Identification (Normalized Score) ---
     # ----------------------------------------------------------------------
     
-    best_match_score = -1
+    # best_match_score를 정규화된 비율(0.0 ~ 1.0)로 초기화
+    best_match_score = -1.0 
     best_root_midi = -1
     best_chord_type = ""
     
-    # Use only unique note classes (C, C#, etc.) regardless of octave
+    # Unique Note Classes (0~11)
     unique_fundamental_midi_notes = sorted(list(set(note % 12 for note in fundamental_midi_notes)))
     
     # Match the identified notes to chord templates based on music theory.
@@ -187,45 +212,53 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
 
         for chord_type, template_intervals in chord_templates.items():
             
-            # Calculate the notes expected in the chord template based on the current root
             expected_notes = set((root_midi_interval + interval) % 12 for interval in template_intervals)
             
-            # The score is the number of expected notes found in the observed intervals
-            match_score = sum(1 for note in expected_notes if note in observed_intervals)
-
-            # Prioritize based on match score and complexity
-            if match_score >= 2 and match_score > best_match_score:
-                best_match_score = match_score
+            # 1. 일치하는 음의 개수
+            match_count = sum(1 for note in expected_notes if note in observed_intervals)
+            
+            # 2. 정규화 점수 (일치율) 계산
+            template_length = len(template_intervals)
+            normalized_score = match_count / template_length
+            
+            # 3. 최고 점수 업데이트: 일치 개수가 최소 2개 이상이고, 일치율이 더 높을 때 업데이트
+            if match_count >= 2 and normalized_score > best_match_score:
+                best_match_score = normalized_score
                 best_root_midi = root_midi_interval
                 best_chord_type = chord_type
 
     # Final Results
-    if best_root_midi != -1 and best_match_score >= 2:
+    if best_root_midi != -1 and best_match_score >= 0.5: # 최소 일치율 50% 이상으로 기준 설정
         root_name = note_names[best_root_midi]
         identified_chord = f"**{root_name} {best_chord_type}**"
-    
+        
         st.markdown(f"## 최종 식별 화음: {identified_chord}")
-        st.info(f"화음 일치 점수 (최대 {len(chord_templates['Major 13th'])}점): {best_match_score}")
+        st.info(f"화음 일치율: **{best_match_score:.2f}** (최소 0.50 이상 필요)")
         
         # 코드 추천 기능 호출 및 출력
         recommended_chords = get_recommended_chords(best_root_midi, best_chord_type)
         
         if recommended_chords:
-            st.subheader("Recommended chords")
+            st.subheader("Recommended Chords (음악 이론 기반)")
 
             formatted_list = []
             for chord in recommended_chords:
-                # chord 예시: "G Dominant 7th (V7)"
                 chord_name = chord.split("(")[0].strip()
-                chord_type = " ".join(chord_name.split(" ")[1:])
+                # Chord Type 추출: 예) Dominant 7th
+                chord_type_parts = chord_name.split(" ")[1:]
+                chord_type = " ".join(chord_type_parts)
+                
+                # Root Name 추출: 예) G
                 root_name = chord_name.split(" ")[0]
                 root_index = note_names.index(root_name)
+
                 interval_string = get_chord_interval_string(root_index, chord_type)
-                formatted_list.append(f"**{chord}** {interval_string}")
-            st.markdown("\n\n".join(formatted_list))
+                formatted_list.append(f"* **{chord}** {interval_string}")
+            
+            st.markdown("\n".join(formatted_list))
 
     else:
-        st.error("Chord identification failed. Please try again with a single chord.")
+        st.error("Chord identification failed. (일치율 50% 미만) Please try again with a single, clear chord.")
 
 
 # ----------------------------------------------------------------------
@@ -234,18 +267,19 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
 
 # (2) Streamlit web page settings
 st.set_page_config(layout="wide")
-st.title("FFT-based Chord Analyzer")
-st.markdown("Analyze chords using the Fourier Transform.")
+st.title("FFT-based Chord Analyzer (화음 일치율 정규화 적용)")
+st.markdown("라이브 녹음 또는 파일 업로드를 통해 화음을 분석합니다.")
 
 # ----------------------------------------------------------------------
 # 1. 마이크 녹음 섹션
 # ----------------------------------------------------------------------
-st.header("1. Analyze with Microphone")
+st.header("1. Analyze with Microphone 🎙️")
+st.caption("녹음 시작 버튼을 누르고 명료하게 화음을 연주해주세요.")
 
 # 녹음 컴포넌트 생성. 녹음된 wav 바이트 데이터를 반환합니다.
-wav_audio_data = audiorecorder("record", "stop")
+wav_audio_data = audiorecorder("녹음 시작", "녹음 중지")
 
-# 데이터가 존재하고 길이도 0이 아닐 때만 처리
+# 데이터가 존재하고 길이도 0이 아닐 때만 처리 (녹음된 데이터는 5KB보다 커야 유효하다고 가정)
 if wav_audio_data is not None and len(wav_audio_data) > 5000:
 
     st.info("Audio detected. Starting analysis...")
@@ -255,18 +289,20 @@ if wav_audio_data is not None and len(wav_audio_data) > 5000:
         audio_segment = AudioSegment.from_wav(io.BytesIO(wav_audio_data))
 
         # 2. AudioSegment를 numpy 배열로 변환
+        # 데이터 타입 조정 (pydub은 보통 16비트 정수)
         y = np.array(audio_segment.get_array_of_samples()).astype(np.float32)
         sr = audio_segment.frame_rate  # 녹음된 파일의 샘플링 레이트 사용
 
-        # 오디오 신호의 볼륨 정규화 (선택 사항)
+        # 오디오 신호의 볼륨 정규화 (필수)
         if np.max(np.abs(y)) > 0:
             y /= np.max(np.abs(y))
 
         # 3. 분석 실행
-        run_analysis(y, sr, "recorded audio")
+        run_analysis(y, sr, "Recorded Audio")
 
     except Exception as e:
-        st.error(f"Failed to process the recorded audio.: {e}")
+        st.error(f"Failed to process the recorded audio: {e}")
+        st.caption("Pydub 오류일 수 있습니다. 시스템에 FFmpeg이 설치되어 있는지 확인해주세요.")
 
 else:
     st.write("No audio has been recorded yet.")
@@ -275,7 +311,8 @@ else:
 # ----------------------------------------------------------------------
 # 2. 파일 업로드 섹션
 # ----------------------------------------------------------------------
-st.header("2. Analyze from File Upload")
+st.header("---")
+st.header("2. Analyze from File Upload 📁")
 
 # (3) file uploader widget
 uploaded_file = st.file_uploader("Select an Audio File (WAV, MP3 recommended)", type=['wav', 'mp3'], key='uploader')
@@ -294,8 +331,3 @@ if uploaded_file is not None:
         # When the audio file is corrupted or incorrectly formatted
         st.error(f"Error: Failed to analyze audio file.: {e}")
         st.info("Please check if the file is a supported format (WAV or MP3) and retry.")
-
-else:
-    # File Upload Pending (only show if no recording is done)
-    if wav_audio_data is None:
-        st.info("Record audio or upload a file to start the analysis.")
