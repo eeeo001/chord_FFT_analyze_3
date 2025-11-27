@@ -6,27 +6,47 @@ from scipy.fft import fft, fftfreq
 from scipy.signal import find_peaks
 from collections import defaultdict
 import io
+# pydub 객체가 반환될 때를 대비해 다시 import 합니다. (pip install pydub 필요)
+from pydub import AudioSegment 
 from audiorecorder import audiorecorder 
 
 
 # Define constants
-TOLERANCE = 0.015 
-MIN_FREQ_HZ = 50 
-MAX_FREQ_HZ = 2000 
-MAX_HARMONIC_N = 8 
+TOLERANCE = 0.015 # 1.5% Tolerance for harmonic check
+MIN_FREQ_HZ = 50 # Filter out noise below 50Hz
+MAX_FREQ_HZ = 2000 # Max frequency for spectrum visualization
+MAX_HARMONIC_N = 8 # Maximum harmonic check range
 
+# Note names for output
 note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
+# Chord Templates (Optimized for up to 7 Notes)
 chord_templates = {
+    # 7음 화음 (7 Notes)
     'Major 13th': [0, 4, 7, 11, 2, 5, 9], 'Minor 13th': [0, 3, 7, 10, 2, 5, 9], 'Dominant 13th': [0, 4, 7, 10, 2, 5, 9],
+
+    # 6음 화음 (6 Notes)
     'Major 11th': [0, 4, 7, 11, 2, 5], 'Minor 11th': [0, 3, 7, 10, 2, 5], 'Dominant 11th': [0, 4, 7, 10, 2, 5],
+
+    # 5음 화음 (5 Notes)
     'Major 9th': [0, 4, 7, 11, 2], 'Minor 9th': [0, 3, 7, 10, 2], 'Dominant 9th': [0, 4, 7, 10, 2],
+
+    # 4음 화음 (4 Notes)
     'Major 7th': [0, 4, 7, 11], 'Minor 7th': [0, 3, 7, 10], 'Dominant 7th': [0, 4, 7, 10],
+
+    # 3음 화음 (3 Notes)
     'Major': [0, 4, 7], 'Minor': [0, 3, 7]
 }
 
+# ----------------------------------------------------------------------
+# --- 함수 정의 시작 ---
+# ----------------------------------------------------------------------
+
 # (1) frequency to MIDI note
 def freq_to_midi(frequency):
+    """
+    frquency(Hz) to MIDI note number (A4=440Hz, MIDI 69).
+    """
     if frequency <= 0: return -1
     midi_note = 69 + 12 * np.log2(frequency / 440.0)
     return int(max(0, min(127, round(midi_note))))
@@ -63,13 +83,15 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
     with col1: st.metric("Sampling Rate (sr)", f"{sr} Hz")
     with col2: st.metric("Duration", f"{len(y)/sr:.2f} seconds")
 
+    # ----------------------------------------------------------------------
     # --- 4. Perform FFT and Calculate Spectrum ---
+    # ----------------------------------------------------------------------
     N = len(y)
     yf = fft(y)
     xf = fftfreq(N, 1/sr)
     half_n = N // 2
-    xf_positive = xf[:half_n] 
-    yf_positive = np.abs(yf[:half_n]) 
+    xf_positive = xf[:half_n] # Positive Frequencies
+    yf_positive = np.abs(yf[:half_n]) # Magnitude (Amplitude Spectrum)
     
     st.subheader("Frequency Spectrum Visualization")
     # --- 5. Visualize Spectrum ---
@@ -78,13 +100,14 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
     ax.set_title(f'Frequency Spectrum: {source_name}')
     ax.set_xlabel('Frequency (Hz)')
     ax.set_ylabel('Magnitude')
-    ax.set_xlim([MIN_FREQ_HZ, MAX_FREQ_HZ]) 
+    ax.set_xlim([MIN_FREQ_HZ, MAX_FREQ_HZ]) # Musical Frequency Range
     ax.grid(True)
     st.pyplot(fig)
-    
+    # 
 
-
+    # ----------------------------------------------------------------------
     # --- 6. Peak Identification and Harmonic Filtering (Core Logic) ---
+    # ----------------------------------------------------------------------
     magnitude_threshold = np.max(yf_positive) * 0.05
     peak_indices, _ = find_peaks(yf_positive, height=magnitude_threshold, prominence=magnitude_threshold * 0.3) 
     valid_indices = [i for i in peak_indices if MIN_FREQ_HZ <= xf_positive[i] <= MAX_FREQ_HZ]
@@ -105,6 +128,7 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
             if is_harmonic: break
         if not is_harmonic: filtered_fundamentals.append((freq, mag))
 
+    # --- Final Fundamental List Creation ---
     filtered_fundamentals.sort(key=lambda x: x[0])
     fundamental_frequencies = [f for f, m in filtered_fundamentals]
     fundamental_midi_notes = [freq_to_midi(f) for f in fundamental_frequencies if f >= MIN_FREQ_HZ]
@@ -112,7 +136,9 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
     st.subheader("Fundamental Frequency Analysis")
     st.markdown(f"**Detected Fundamental Frequencies (Hz):** `{np.round(fundamental_frequencies, 2)}`")
     
+    # ----------------------------------------------------------------------
     # --- 7. Chord Identification (Normalized Score) ---
+    # ----------------------------------------------------------------------
     best_match_score = -1.0 
     best_root_midi = -1
     best_chord_type = ""
@@ -132,14 +158,16 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
                 best_chord_type = chord_type
 
     # Final Results
-    if best_root_midi != -1 and best_match_score >= 0.5:
+    if best_root_midi != -1 and best_match_score >= 0.5: # 최소 일치율 50% 이상으로 기준 설정
         root_name = note_names[best_root_midi]
         identified_chord = f"**{root_name} {best_chord_type}**"
         
         st.markdown(f"## 최종 식별 화음: {identified_chord}")
         st.info(f"화음 일치율: **{best_match_score:.2f}** (최소 0.50 이상 필요)")
         
+        # 코드 추천 기능 호출 및 출력
         recommended_chords = get_recommended_chords(best_root_midi, best_chord_type)
+        
         if recommended_chords:
             st.subheader("Recommended Chords (음악 이론 기반)")
             formatted_list = []
@@ -160,7 +188,7 @@ def run_analysis(y, sr, source_name="Uploaded Audio"):
 # ----------------------------------------------------------------------
 
 st.set_page_config(layout="wide")
-st.title("FFT-based Chord Analyzer (화음 일치율 정규화 적용)")
+st.title("FFT-based Chord Analyzer (방어 로직 최종 적용)")
 st.markdown("라이브 녹음 또는 파일 업로드를 통해 화음을 분석합니다.")
 
 # ----------------------------------------------------------------------
@@ -172,20 +200,24 @@ st.caption("녹음 시작 버튼을 누르고 명료하게 화음을 연주해�
 wav_audio_data = audiorecorder("녹음 시작", "녹음 중지")
 
 if wav_audio_data is not None and len(wav_audio_data) > 5000:
-    st.info("Audio detected. Starting analysis using Librosa...")
+    st.info("Audio detected. Starting analysis...")
 
     try:
-        # 🚨 중요: wav_audio_data의 타입이 bytes인지 확인하고 오류 출력
-        if not isinstance(wav_audio_data, bytes):
-            st.error(f"FATAL ERROR: `audiorecorder` returned an unexpected object type.")
-            st.code(f"Expected type: <class 'bytes'>, Actual type: {type(wav_audio_data)}")
-            # 만약 AudioSegment가 뜬다면, Streamlit 캐시나 재시작 문제일 가능성이 99%
-            st.stop()
+        # 🚨 [최종 수정 로직]: 반환된 객체의 타입에 따라 유연하게 처리합니다.
+        if isinstance(wav_audio_data, AudioSegment):
+            st.warning("Detected AudioSegment object. Converting to WAV bytes for Librosa.")
+            # AudioSegment 객체를 io.BytesIO 객체에 WAV 포맷으로 저장 (바이트 변환)
+            buffer = io.BytesIO()
+            wav_audio_data.export(buffer, format="wav")
+            audio_io = buffer
+            audio_io.seek(0)
+        elif isinstance(wav_audio_data, bytes):
+            # 예상대로 bytes가 들어온 경우 (원래 librosa 호환 로직)
+            audio_io = io.BytesIO(wav_audio_data)
+            audio_io.seek(0)
+        else:
+            raise TypeError(f"Unexpected audio data type: {type(wav_audio_data)}. Could not process.")
 
-
-        # WAV 바이트 데이터를 io.BytesIO 객체로 감싸 librosa에 전달
-        audio_io = io.BytesIO(wav_audio_data)
-        audio_io.seek(0) 
 
         # librosa 로드 및 정규화
         y, sr = librosa.load(audio_io, sr=None) 
@@ -197,7 +229,7 @@ if wav_audio_data is not None and len(wav_audio_data) > 5000:
 
     except Exception as e:
         st.error(f"Failed to process the recorded audio: {e}")
-        st.caption("오디오 처리 중 예기치 않은 오류가 발생했습니다. 환경설정(FFmpeg 등)을 확인해주세요.")
+        st.caption("오디오 처리 중 예기치 않은 오류가 발생했습니다. 시스템에 FFmpeg이 설치되어 있는지 확인해주세요.")
 
 else:
     st.write("No audio has been recorded yet.")
