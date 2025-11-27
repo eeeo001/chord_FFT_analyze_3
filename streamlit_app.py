@@ -208,13 +208,13 @@ try:
             filtered_fundamentals.append((freq, mag))
 
     filtered_fundamentals.sort(key=lambda x: x[0])
-    fundamental_frequencies = [f for f, m in filtered_fundamentals]
-    # Convert fundamental frequencies to MIDI notes (only notes above 50 Hz, approx G#1)
-    fundamental_midi_notes = [
-        freq_to_midi(f) for f in fundamental_frequencies if f > 50
-    ]
+    
+    # 근음 주파수와 그 강도를 매핑하여 사용
+    fundamental_data = {
+        freq_to_midi(f): m for f, m in filtered_fundamentals if f > 50
+    }
+    fundamental_midi_notes = list(fundamental_data.keys())
 
-    # --- REMOVED: st.subheader("검출된 근음 주파수 (Fundamental Frequencies)") and st.write(np.round(fundamental_frequencies, 2)) ---
 
     # -----------------------------
     # Chord Detection (Collect all matching candidates)
@@ -239,21 +239,35 @@ try:
     for root_midi in unique_fundamental_midi_notes:
         # Calculate intervals (0-11) relative to the current root_midi
         intervals = set((n - root_midi) % 12 for n in fundamental_midi_notes)
-
+        
+        # 근음의 강도 (Magnitude of the root note)
+        root_magnitude = fundamental_data.get(root_midi, 0)
+        # 최대 강도 (Max magnitude for normalization)
+        max_magnitude = max(fundamental_data.values()) if fundamental_data else 1
+        
+        # 근음 강도를 0.0 ~ 1.0 사이로 정규화 (normalization)
+        normalized_root_mag = root_magnitude / max_magnitude if max_magnitude > 0 else 0
+        
         for chord_type, template in chord_templates.items():
-            # Calculate match score based on how many template notes are present in the audio
-            score = sum(1 for t in template if t in intervals)
+            # 1. 기본적인 일치 점수: 템플릿의 몇 개 음이 오디오에 존재하는가?
+            match_count = sum(1 for t in template if t in intervals)
             
-            # Store all valid matches (score 2 or more)
-            if score >= 2:
+            # 2. 근음 가중치 부여 (Weighting the score by root magnitude):
+            # 근음 강도가 높을수록 최종 점수에 가중치를 높게 부여
+            # 최종 점수 = match_count + (normalized_root_mag * 1.5)
+            # 근음이 실제로 강할 경우, match_count가 낮아도 최종 점수가 높아져 근음일 가능성을 강화함.
+            weighted_score = match_count + (normalized_root_mag * 1.5) 
+            
+            # Store all valid matches (match_count 2 또는 weighted_score 2 이상)
+            if weighted_score >= 2.0:
                 all_matches.append({
-                    'score': score,
+                    'score': weighted_score, # 가중치가 적용된 점수를 사용
                     'root_midi': root_midi,
                     'chord_type': chord_type,
                     'template_len': len(template) # Used for tie-breaking: prefer shorter templates
                 })
 
-    # Sort matches: 1. By score (highest first), 2. By template length (shorter/simpler first), 3. By root MIDI (deterministic)
+    # Sort matches: 1. By weighted_score (highest first), 2. By template length (shorter/simpler first), 3. By root MIDI (deterministic)
     # Note the negative sign on template_len for ascending length preference
     all_matches.sort(key=lambda x: (x['score'], -x['template_len'], -x['root_midi']), reverse=True)
     
@@ -268,11 +282,10 @@ try:
             
     best_match = unique_matches[0] if unique_matches else None
     
-    # 변경: 스펙트럼 일치 순이 아닌, 화성적으로 어울리는 코드를 추천
+    # 화성적으로 어울리는 코드 3개 추천
     if best_match:
         root_midi = best_match['root_midi']
         chord_type = best_match['chord_type']
-        # 새로운 함수를 사용하여 화성적으로 어울리는 코드 3개 생성
         recommended_matches = get_harmonic_recommendations(root_midi, chord_type, note_names)
     else:
         recommended_matches = []
@@ -286,7 +299,6 @@ try:
     if best_match:
         best_root_midi = best_match['root_midi']
         best_chord_type = best_match['chord_type']
-        # best_match_score = best_match['score'] # 내부 로직 사용을 위해 변수 유지
         
         root_note = note_names[best_root_midi % 12]
         chord = f"{root_note} {best_chord_type}"
@@ -299,7 +311,6 @@ try:
         
         st.markdown(f"### **✅ 최종 식별 화음:** {chord}")
         st.metric(label="구성 음정 (Constituent Notes)", value=notes_output)
-        # st.info(f"일치 점수: {best_match_score}점") <-- 이 줄을 제거했습니다.
         
         # Display Recommendations
         if recommended_matches:
