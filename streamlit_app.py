@@ -55,14 +55,20 @@ if len(audio) > 0:
 st.subheader("📁 또는 오디오 파일 업로드")
 uploaded_file = st.file_uploader("WAV/MP3 파일 업로드", type=['wav', 'mp3'])
 
-# If recorded audio exists → override uploaded_file
-if recorded_file is not None:
-    uploaded_file = recorded_file
+# --- 파일 분석 소스 결정 (수정된 로직) ---
+file_to_analyze = None
 
+if uploaded_file is not None:
+    # Priority 1: 사용자가 새로 업로드한 파일이 있다면 그것을 사용
+    file_to_analyze = uploaded_file
+elif recorded_file is not None:
+    # Priority 2: 업로드된 파일이 없고 녹음 파일이 있다면 그것을 사용
+    file_to_analyze = recorded_file
+    
 # -----------------------------
 # No file yet
 # -----------------------------
-if uploaded_file is None:
+if file_to_analyze is None:
     st.info("분석을 위해 오디오를 녹음하거나 파일을 업로드하세요.")
     st.stop()
 
@@ -70,8 +76,8 @@ if uploaded_file is None:
 # Begin Analysis
 # -----------------------------
 try:
-    # Load audio data
-    y, sr = librosa.load(uploaded_file, sr=None)
+    # Load audio data (file_to_analyze 사용)
+    y, sr = librosa.load(file_to_analyze, sr=None)
 
     st.success("오디오 로드 완료!")
     col1, col2 = st.columns(2)
@@ -255,12 +261,13 @@ try:
                 # Append recommended chord and its constituent notes
                 rec_data.append([rec_chord, rec_notes_output])
             
-            # Create a simple table for recommendations
-            st.table(
+            # Create a simple table for recommendations (Changed st.table to st.dataframe and added hide_index=True)
+            st.dataframe(
                 pd.DataFrame(
                     rec_data, 
                     columns=['추천 화음', '구성 음정'] # Updated column name to '구성 음정'
-                )
+                ),
+                hide_index=True # 인덱스 숨기기
             )
 
     else:
