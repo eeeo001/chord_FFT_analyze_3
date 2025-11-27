@@ -155,8 +155,7 @@ try:
         freq_to_midi(f) for f in fundamental_frequencies if f > 50
     ]
 
-    st.subheader("검출된 근음 주파수 (Fundamental Frequencies)")
-    st.write(np.round(fundamental_frequencies, 2))
+    # --- REMOVED: st.subheader("검출된 근음 주파수 (Fundamental Frequencies)") and st.write(np.round(fundamental_frequencies, 2)) ---
 
     # -----------------------------
     # Chord Detection (Collect all matching candidates)
@@ -168,7 +167,10 @@ try:
         'Minor': [0, 3, 7],
         'Dominant 7th': [0, 4, 7, 10],
         'Major 7th': [0, 4, 7, 11],
-        'Minor 7th': [0, 3, 7, 10]
+        'Minor 7th': [0, 3, 7, 10],
+        'Dominant 9th': [0, 4, 7, 10, 2],  # Added 9th chord
+        'Major 9th': [0, 4, 7, 11, 2],    # Added 9th chord
+        'Minor 9th': [0, 3, 7, 10, 2]     # Added 9th chord
     }
 
     all_matches = []
@@ -222,7 +224,7 @@ try:
         root_note = note_names[best_root_midi % 12]
         chord = f"{root_note} {best_chord_type}"
         
-        # Calculate Chord Notes
+        # Calculate Chord Notes for Best Match
         template = chord_templates[best_chord_type]
         chord_note_indices = [((best_root_midi % 12) + interval) % 12 for interval in template]
         unique_chord_notes_names = [note_names[i] for i in sorted(list(set(chord_note_indices)))]
@@ -239,15 +241,25 @@ try:
             
             rec_data = []
             for match in recommended_matches:
-                rec_root_note = note_names[match['root_midi'] % 12]
-                rec_chord = f"{rec_root_note} {match['chord_type']}"
-                rec_data.append([rec_chord, f"{match['score']}점"])
+                rec_root_midi = match['root_midi']
+                rec_chord_type = match['chord_type']
+                rec_root_note = note_names[rec_root_midi % 12]
+                rec_chord = f"{rec_root_note} {rec_chord_type}"
+                
+                # Calculate Chord Notes for Recommendation
+                rec_template = chord_templates[rec_chord_type]
+                rec_chord_note_indices = [((rec_root_midi % 12) + interval) % 12 for interval in rec_template]
+                rec_unique_notes_names = [note_names[i] for i in sorted(list(set(rec_chord_note_indices)))]
+                rec_notes_output = " - ".join(rec_unique_notes_names)
+                
+                # Append recommended chord and its constituent notes
+                rec_data.append([rec_chord, rec_notes_output])
             
             # Create a simple table for recommendations
             st.table(
                 pd.DataFrame(
                     rec_data, 
-                    columns=['추천 화음', '일치 점수']
+                    columns=['추천 화음', '구성 음정'] # Updated column name to '구성 음정'
                 )
             )
 
