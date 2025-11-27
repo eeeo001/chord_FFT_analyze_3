@@ -227,9 +227,14 @@ try:
         'Dominant 7th': [0, 4, 7, 10],
         'Major 7th': [0, 4, 7, 11],
         'Minor 7th': [0, 3, 7, 10],
-        'Dominant 9th': [0, 4, 7, 10, 2],  # Added 9th chord
-        'Major 9th': [0, 4, 7, 11, 2],    # Added 9th chord
-        'Minor 9th': [0, 3, 7, 10, 2]     # Added 9th chord
+        'Dominant 9th': [0, 4, 7, 10, 2],
+        'Major 9th': [0, 4, 7, 11, 2],
+        'Minor 9th': [0, 3, 7, 10, 2],
+        # --- 13도 화음 템플릿 추가 (D13 오인식 방지) ---
+        'Dominant 13th': [0, 4, 7, 10, 2, 9], # D13 = D, F#, A, C, E, B
+        'Major 13th': [0, 4, 7, 11, 2, 9],    # Cmaj13 = C, E, G, B, D, A
+        'Minor 13th': [0, 3, 7, 10, 2, 9]     # Cm13 = C, Eb, G, Bb, D, A
+        # -----------------------------------------------
     }
 
     all_matches = []
