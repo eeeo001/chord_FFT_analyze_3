@@ -68,6 +68,7 @@ if uploaded_file is None:
 # Begin Analysis
 # -----------------------------
 try:
+    # Load audio file
     y, sr = librosa.load(uploaded_file, sr=None)
 
     st.success("Audio loaded!")
@@ -75,122 +76,135 @@ try:
     with col1:
         st.metric("Sampling Rate", f"{sr} Hz")
     with col2:
-        st.metric("Duration", f"{len(y)/sr:.2f} seconds")
+        st.metric("Duration", f"{len(y)/sr:.2f} sec")
 
     # -----------------------------
-    # FFT Calculation
+    # FFT
     # -----------------------------
     N = len(y)
     yf = fft(y)
     xf = fftfreq(N, 1/sr)
 
-    half_n = N // 2
-    xf_positive = xf[:half_n]
-    yf_positive = np.abs(yf[:half_n])
+    half = N // 2
+    xf_pos = xf[:half]
+    yf_pos = np.abs(yf[:half])
 
-    # -----------------------------
-    # Show Spectrum
-    # -----------------------------
+    # Plot
     st.subheader("Frequency Spectrum")
-
     fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(xf_positive, yf_positive)
-    ax.set_title("Frequency Spectrum")
-    ax.set_xlabel("Frequency (Hz)")
-    ax.set_ylabel("Magnitude")
+    ax.plot(xf_pos, yf_pos)
     ax.set_xlim([20, 2000])
-    ax.grid(True)
     st.pyplot(fig)
 
     # -----------------------------
-    # Peak Identification
+    # Peak Detection
     # -----------------------------
-    magnitude_threshold = np.max(yf_positive) * 0.05
-    frequency_resolution = sr / N
-    min_freq_separation_hz = 10
-    distance_bins = int(min_freq_separation_hz / frequency_resolution)
+    threshold = np.max(yf_pos) * 0.05
+    freq_resolution = sr / N
+    distance_bins = int(10 / freq_resolution)
 
-    peak_indices, _ = find_peaks(
-        yf_positive,
-        height=magnitude_threshold,
-        distance=distance_bins
-    )
-
-    peak_frequencies = xf_positive[peak_indices]
-    peak_magnitudes = yf_positive[peak_indices]
+    peak_idx, _ = find_peaks(yf_pos, height=threshold, distance=distance_bins)
+    peak_freqs = xf_pos[peak_idx]
+    peak_mags = yf_pos[peak_idx]
 
     # -----------------------------
-    # Harmonic Filtering
+    # Harmonic Filtering → Fundamental Frequencies
     # -----------------------------
-    initial_sorted_peaks = sorted(
-        zip(peak_magnitudes, peak_frequencies),
-        key=lambda x: x[0],
-        reverse=True
-    )
+    peaks_sorted = sorted(zip(peak_mags, peak_freqs), reverse=True)
+    fund_freqs = []
+    tolerance = 0.015
 
-    filtered_fundamentals = []
-    tolerance = 0.015  # 1.5%
-
-    for mag, freq in initial_sorted_peaks:
-        is_harmonic = False
-        for fundamental_freq, _ in filtered_fundamentals:
+    for mag, f in peaks_sorted:
+        harmonic = False
+        for (ff, _) in fund_freqs:
             for n in range(2, 6):
-                expected = fundamental_freq * n
-                if abs(freq - expected) / expected < tolerance:
-                    is_harmonic = True
+                if abs(f - ff * n) / (ff * n) < tolerance:
+                    harmonic = True
                     break
-            if is_harmonic:
+            if harmonic:
                 break
-        if not is_harmonic:
-            filtered_fundamentals.append((freq, mag))
+        if not harmonic:
+            fund_freqs.append((f, mag))
 
-    filtered_fundamentals.sort(key=lambda x: x[0])
-    fundamental_frequencies = [f for f, m in filtered_fundamentals]
-    fundamental_midi_notes = [
-        freq_to_midi(f) for f in fundamental_frequencies if f > 50
-    ]
+    fund_freqs = [f for f, m in sorted(fund_freqs)]
+    fund_midi = [freq_to_midi(f) for f in fund_freqs if f > 50]
 
-    st.subheader("Fundamental Frequencies")
-    st.write(np.round(fundamental_frequencies, 2))
+    st.subheader("Detected Fundamental Frequencies")
+    st.write(fund_freqs)
 
     # -----------------------------
-    # Chord Detection
+    # Chord Matching
     # -----------------------------
     note_names = ['C', 'C#', 'D', 'D#', 'E', 'F',
                   'F#', 'G', 'G#', 'A', 'A#', 'B']
+
     chord_templates = {
-        'Major': [0, 4, 7],
-        'Minor': [0, 3, 7],
-        'Dominant 7th': [0, 4, 7, 10],
-        'Major 7th': [0, 4, 7, 11],
-        'Minor 7th': [0, 3, 7, 10]
+        "Major": [0, 4, 7],
+        "Minor": [0, 3, 7],
+        "Dominant7": [0, 4, 7, 10],
+        "Major7": [0, 4, 7, 11],
+        "Minor7": [0, 3, 7, 10]
     }
 
-    best_match_score = -1
-    best_root_midi = -1
-    best_chord_type = "Unknown"
+    unique_midi = sorted(list(set(fund_midi)))
 
-    unique_fundamental_midi_notes = sorted(list(set(fundamental_midi_notes)))
+    best_score = -1
+    best_root = None
+    best_type = None
 
-    for root_midi in unique_fundamental_midi_notes:
-        intervals = set((n - root_midi) % 12 for n in fundamental_midi_notes)
+    for root in unique_midi:
+        intervals = set((m - root) % 12 for m in fund_midi)
 
-        for chord_type, template in chord_templates.items():
-            score = sum(1 for t in template if t in intervals)
-            if score >= 2 and score > best_match_score:
-                best_match_score = score
-                best_root_midi = root_midi
-                best_chord_type = chord_type
+        for chord_type, pattern in chord_templates.items():
+            score = sum(1 for p in pattern if p in intervals)
 
-    if best_root_midi != -1 and best_match_score >= 2:
-        root_note = note_names[best_root_midi % 12]
-        chord = f"{root_note} {best_chord_type}"
+            if score > best_score and score >= 2:
+                best_score = score
+                best_root = root
+                best_type = chord_type
+
+    if best_root is None:
+        final_chord = "No chord identified"
     else:
-        chord = "No chord identified"
+        final_chord = f"{note_names[best_root % 12]} {best_type}"
 
-    st.subheader("🎵 Final Identified Chord")
-    st.markdown(f"### **{chord}**")
-    st.info(f"Match Score: {best_match_score}")
+    # -----------------------------
+    # 🎵 Final Output + 구성음 + 추천코드
+    # -----------------------------
+
+    CHORDS = {
+        "C Major": ["C", "E", "G"],
+        "C Minor": ["C", "Eb", "G"],
+        "C Dominant7": ["C", "E", "G", "Bb"],
+        "C Major7": ["C", "E", "G", "B"],
+        "C Minor7": ["C", "Eb", "G", "Bb"],
+        # 필요 시 더 추가 가능
+    }
+
+    RECOMMENDED = {
+        "C Major": ["F Major", "G Major", "A Minor"],
+        "A Minor": ["D Minor", "E Major", "G Major"],
+        "G Major": ["C Major", "D Major", "E Minor"],
+        "E Minor": ["G Major", "A Minor", "C Major"],
+        "F Major": ["Bb Major", "C Major", "D Minor"]
+    }
+
+    st.header("🎶 Final Identified Chord")
+    st.write(f"### {final_chord}")
+    st.write(f"Match Score: {best_score}")
+
+    # 구성음
+    if final_chord in CHORDS:
+        st.write("**구성음:** " + ", ".join(CHORDS[final_chord]))
+    else:
+        st.write("구성음 데이터 없음.")
+
+    # 추천 코드
+    if final_chord in RECOMMENDED:
+        rec = RECOMMENDED[final_chord]
+        st.write("**추천 코드 진행:** " + " → ".join(rec))
+    else:
+        st.write("추천 코드 데이터 없음.")
 
 except Exception as e:
     st.error(f"Error analyzing audio: {e}")
