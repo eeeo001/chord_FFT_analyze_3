@@ -58,9 +58,9 @@ if recording and recording.audio_receiver:
 
 # --- (1) define function: frequency to MIDI note ---
 def freq_to_midi(frequency):
-   """
+  """
    frquency(Hz) to MIDI note number (A4=440Hz, MIDI 69)
-   """
+  """
    if frequency <= 0:
        return -1
    # MIDI note = 69 + 12 * log2(frequency / 440.0)
