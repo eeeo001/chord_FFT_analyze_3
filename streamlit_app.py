@@ -27,6 +27,59 @@ def freq_to_midi(frequency):
     return int(round(midi_note))
 
 # -----------------------------
+# Utility: Harmonic Recommendation (화성적 추천)
+# -----------------------------
+# 식별된 화음과 화성적으로 잘 어울리는 코드 3개를 추천합니다. (다이아토닉 기반)
+def get_harmonic_recommendations(root_midi, chord_type, note_names):
+    recommendations = []
+    root_idx = root_midi % 12
+
+    # I: Major, ii: Minor, iii: Minor, IV: Major, V: Dom7, vi: Minor (다이아토닉 화음 기준)
+    
+    if 'Major' in chord_type: # I (으뜸 화음)으로 간주
+        # 추천 1: IV Chord (버금딸림 화음)
+        iv_root_idx = (root_idx + 5) % 12
+        recommendations.append({'root_midi': iv_root_idx, 'chord_type': 'Major'})
+        
+        # 추천 2: V7 Chord (딸림 화음 - Dominant 7th로 사용)
+        v_root_idx = (root_idx + 7) % 12
+        recommendations.append({'root_midi': v_root_idx, 'chord_type': 'Dominant 7th'})
+        
+        # 추천 3: vi Minor Chord (나란한 조의 으뜸 화음 - Submediant)
+        vi_root_idx = (root_idx + 9) % 12
+        recommendations.append({'root_midi': vi_root_idx, 'chord_type': 'Minor'})
+
+    elif 'Minor' in chord_type: # i (단조 으뜸 화음)으로 간주
+        # i, iv, V7, III (단조 화음 진행 기준)
+        
+        # 추천 1: iv Chord (버금딸림 단조 화음)
+        iv_root_idx = (root_idx + 5) % 12
+        recommendations.append({'root_midi': iv_root_idx, 'chord_type': 'Minor'})
+        
+        # 추천 2: V7 Chord (딸림 화음 - 단조에서 주로 V7 사용)
+        v_root_idx = (root_idx + 7) % 12
+        recommendations.append({'root_midi': v_root_idx, 'chord_type': 'Dominant 7th'})
+        
+        # 추천 3: III Chord (나란한 조의 으뜸 화음 - Relative Major)
+        III_root_idx = (root_idx + 3) % 12
+        recommendations.append({'root_midi': III_root_idx, 'chord_type': 'Major'})
+    
+    else: # 7th, 9th 등 기타 화음 (Major Key Context 기준으로 추천)
+        # 추천 1: IV Chord
+        iv_root_idx = (root_idx + 5) % 12
+        recommendations.append({'root_midi': iv_root_idx, 'chord_type': 'Major'})
+        
+        # 추천 2: V Chord
+        v_root_idx = (root_idx + 7) % 12
+        recommendations.append({'root_midi': v_root_idx, 'chord_type': 'Dominant 7th'})
+        
+        # 추천 3: vi Chord
+        vi_root_idx = (root_idx + 9) % 12
+        recommendations.append({'root_midi': vi_root_idx, 'chord_type': 'Minor'})
+        
+    return recommendations[:3] # 항상 3개만 반환
+
+# -----------------------------
 # 1) Audio Recording Section
 # -----------------------------
 st.subheader("🎤 오디오 녹음")
@@ -214,7 +267,15 @@ try:
             seen.add(identifier)
             
     best_match = unique_matches[0] if unique_matches else None
-    recommended_matches = unique_matches[1:4]
+    
+    # 변경: 스펙트럼 일치 순이 아닌, 화성적으로 어울리는 코드를 추천
+    if best_match:
+        root_midi = best_match['root_midi']
+        chord_type = best_match['chord_type']
+        # 새로운 함수를 사용하여 화성적으로 어울리는 코드 3개 생성
+        recommended_matches = get_harmonic_recommendations(root_midi, chord_type, note_names)
+    else:
+        recommended_matches = []
 
 
     # -----------------------------
@@ -225,7 +286,7 @@ try:
     if best_match:
         best_root_midi = best_match['root_midi']
         best_chord_type = best_match['chord_type']
-        best_match_score = best_match['score']
+        # best_match_score = best_match['score'] # 내부 로직 사용을 위해 변수 유지
         
         root_note = note_names[best_root_midi % 12]
         chord = f"{root_note} {best_chord_type}"
@@ -238,12 +299,12 @@ try:
         
         st.markdown(f"### **✅ 최종 식별 화음:** {chord}")
         st.metric(label="구성 음정 (Constituent Notes)", value=notes_output)
-        st.info(f"일치 점수: {best_match_score}점")
+        # st.info(f"일치 점수: {best_match_score}점") <-- 이 줄을 제거했습니다.
         
         # Display Recommendations
         if recommended_matches:
             st.markdown("---")
-            st.subheader("💡 추가 추천 화음 (Top 3 Candidates)")
+            st.subheader("💡 추가 추천 화음 (Top 3 Harmonically Fitting Candidates)")
             
             rec_data = []
             for match in recommended_matches:
@@ -253,7 +314,8 @@ try:
                 rec_chord = f"{rec_root_note} {rec_chord_type}"
                 
                 # Calculate Chord Notes for Recommendation
-                rec_template = chord_templates[rec_chord_type]
+                # Use the global chord_templates dictionary
+                rec_template = chord_templates.get(rec_chord_type, [0, 4, 7]) # Fallback to Major Triad
                 rec_chord_note_indices = [((rec_root_midi % 12) + interval) % 12 for interval in rec_template]
                 rec_unique_notes_names = [note_names[i] for i in sorted(list(set(rec_chord_note_indices)))]
                 rec_notes_output = " - ".join(rec_unique_notes_names)
