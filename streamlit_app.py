@@ -33,12 +33,19 @@ audio = audiorecorder("Start Recording", "Stop Recording")
 recorded_file = None
 
 if len(audio) > 0:
-    st.audio(audio.tobytes(), format="audio/wav")
+    st.success("Recording complete!")
 
-    recorded_file = io.BytesIO(audio.tobytes())
+    # Convert AudioSegment → WAV bytes
+    wav_buffer = io.BytesIO()
+    audio.export(wav_buffer, format="wav")
+    wav_bytes = wav_buffer.getvalue()
+
+    # Playback
+    st.audio(wav_bytes, format="audio/wav")
+
+    # Save to variable for main analysis
+    recorded_file = io.BytesIO(wav_bytes)
     recorded_file.name = "recorded_audio.wav"
-
-    st.success("Recording complete! Ready to analyze.")
 
 # -----------------------------
 # 2) File Uploader Section
