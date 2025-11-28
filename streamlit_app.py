@@ -27,59 +27,6 @@ def freq_to_midi(frequency):
     return int(round(midi_note))
 
 # -----------------------------
-# Utility: Harmonic Recommendation (화성적 추천)
-# -----------------------------
-# 식별된 화음과 화성적으로 잘 어울리는 코드 3개를 추천합니다. (다이아토닉 기반)
-def get_harmonic_recommendations(root_midi, chord_type, note_names):
-    recommendations = []
-    root_idx = root_midi % 12
-
-    # I: Major, ii: Minor, iii: Minor, IV: Major, V: Dom7, vi: Minor (다이아토닉 화음 기준)
-    
-    if 'Major' in chord_type: # I (으뜸 화음)으로 간주
-        # 추천 1: IV Chord (버금딸림 화음)
-        iv_root_idx = (root_idx + 5) % 12
-        recommendations.append({'root_midi': iv_root_idx, 'chord_type': 'Major'})
-        
-        # 추천 2: V7 Chord (딸림 화음 - Dominant 7th로 사용)
-        v_root_idx = (root_idx + 7) % 12
-        recommendations.append({'root_midi': v_root_idx, 'chord_type': 'Dominant 7th'})
-        
-        # 추천 3: vi Minor Chord (나란한 조의 으뜸 화음 - Submediant)
-        vi_root_idx = (root_idx + 9) % 12
-        recommendations.append({'root_midi': vi_root_idx, 'chord_type': 'Minor'})
-
-    elif 'Minor' in chord_type: # i (단조 으뜸 화음)으로 간주
-        # i, iv, V7, III (단조 화음 진행 기준)
-        
-        # 추천 1: iv Chord (버금딸림 단조 화음)
-        iv_root_idx = (root_idx + 5) % 12
-        recommendations.append({'root_midi': iv_root_idx, 'chord_type': 'Minor'})
-        
-        # 추천 2: V7 Chord (딸림 화음 - 단조에서 주로 V7 사용)
-        v_root_idx = (root_idx + 7) % 12
-        recommendations.append({'root_midi': v_root_idx, 'chord_type': 'Dominant 7th'})
-        
-        # 추천 3: III Chord (나란한 조의 으뜸 화음 - Relative Major)
-        III_root_idx = (root_idx + 3) % 12
-        recommendations.append({'root_midi': III_root_idx, 'chord_type': 'Major'})
-    
-    else: # 7th, 9th 등 기타 화음 (Major Key Context 기준으로 추천)
-        # 추천 1: IV Chord
-        iv_root_idx = (root_idx + 5) % 12
-        recommendations.append({'root_midi': iv_root_idx, 'chord_type': 'Major'})
-        
-        # 추천 2: V Chord
-        v_root_idx = (root_idx + 7) % 12
-        recommendations.append({'root_midi': v_root_idx, 'chord_type': 'Dominant 7th'})
-        
-        # 추천 3: vi Chord
-        vi_root_idx = (root_idx + 9) % 12
-        recommendations.append({'root_midi': vi_root_idx, 'chord_type': 'Minor'})
-        
-    return recommendations[:3] # 항상 3개만 반환
-
-# -----------------------------
 # 1) Audio Recording Section
 # -----------------------------
 st.subheader("🎤 오디오 녹음")
@@ -281,6 +228,59 @@ try:
             
     best_match = unique_matches[0] if unique_matches else None
     
+# -----------------------------
+# Utility: Harmonic Recommendation (화성적 추천)
+# -----------------------------
+# 식별된 화음과 화성적으로 잘 어울리는 코드 3개를 추천합니다. (다이아토닉 기반)
+def get_harmonic_recommendations(root_midi, chord_type, note_names):
+    recommendations = []
+    root_idx = root_midi % 12
+
+    # I: Major, ii: Minor, iii: Minor, IV: Major, V: Dom7, vi: Minor (다이아토닉 화음 기준)
+    
+    if 'Major' in chord_type: # I (으뜸 화음)으로 간주
+        # 추천 1: IV Chord (버금딸림 화음)
+        iv_root_idx = (root_idx + 5) % 12
+        recommendations.append({'root_midi': iv_root_idx, 'chord_type': 'Major'})
+        
+        # 추천 2: V7 Chord (딸림 화음 - Dominant 7th로 사용)
+        v_root_idx = (root_idx + 7) % 12
+        recommendations.append({'root_midi': v_root_idx, 'chord_type': 'Dominant 7th'})
+        
+        # 추천 3: vi Minor Chord (나란한 조의 으뜸 화음 - Submediant)
+        vi_root_idx = (root_idx + 9) % 12
+        recommendations.append({'root_midi': vi_root_idx, 'chord_type': 'Minor'})
+
+    elif 'Minor' in chord_type: # i (단조 으뜸 화음)으로 간주
+        # i, iv, V7, III (단조 화음 진행 기준)
+        
+        # 추천 1: iv Chord (버금딸림 단조 화음)
+        iv_root_idx = (root_idx + 5) % 12
+        recommendations.append({'root_midi': iv_root_idx, 'chord_type': 'Minor'})
+        
+        # 추천 2: V7 Chord (딸림 화음 - 단조에서 주로 V7 사용)
+        v_root_idx = (root_idx + 7) % 12
+        recommendations.append({'root_midi': v_root_idx, 'chord_type': 'Dominant 7th'})
+        
+        # 추천 3: III Chord (나란한 조의 으뜸 화음 - Relative Major)
+        III_root_idx = (root_idx + 3) % 12
+        recommendations.append({'root_midi': III_root_idx, 'chord_type': 'Major'})
+    
+    else: # 7th, 9th 등 기타 화음 (Major Key Context 기준으로 추천)
+        # 추천 1: IV Chord
+        iv_root_idx = (root_idx + 5) % 12
+        recommendations.append({'root_midi': iv_root_idx, 'chord_type': 'Major'})
+        
+        # 추천 2: V Chord
+        v_root_idx = (root_idx + 7) % 12
+        recommendations.append({'root_midi': v_root_idx, 'chord_type': 'Dominant 7th'})
+        
+        # 추천 3: vi Chord
+        vi_root_idx = (root_idx + 9) % 12
+        recommendations.append({'root_midi': vi_root_idx, 'chord_type': 'Minor'})
+        
+    return recommendations[:3] # 항상 3개만 반환
+
     # 화성적으로 어울리는 코드 3개 추천
     if best_match:
         root_midi = best_match['root_midi']
