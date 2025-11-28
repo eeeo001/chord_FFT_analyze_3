@@ -227,9 +227,9 @@ try:
         'Dominant 7th': [0, 4, 7, 10],
         'Major 7th': [0, 4, 7, 11],
         'Minor 7th': [0, 3, 7, 10],
-        'Dominant 9th': [0, 4, 7, 10, 2],  # Added 9th chord
-        'Major 9th': [0, 4, 7, 11, 2],    # Added 9th chord
-        'Minor 9th': [0, 3, 7, 10, 2]     # Added 9th chord
+        'Dominant 9th': [0, 4, 7, 10, 2],
+        'Major 9th': [0, 4, 7, 11, 2],
+        'Minor 9th': [0, 3, 7, 10, 2],
     }
 
     all_matches = []
@@ -254,9 +254,8 @@ try:
             
             # 2. 근음 가중치 부여 (Weighting the score by root magnitude):
             # 근음 강도가 높을수록 최종 점수에 가중치를 높게 부여
-            # 최종 점수 = match_count + (normalized_root_mag * 1.5)
-            # 근음이 실제로 강할 경우, match_count가 낮아도 최종 점수가 높아져 근음일 가능성을 강화함.
-            weighted_score = match_count + (normalized_root_mag * 1.5) 
+            # *** 여기서 가중치를 1.5에서 2.0으로 상향 조정했습니다. ***
+            weighted_score = match_count + (normalized_root_mag * 2.0) 
             
             # Store all valid matches (match_count 2 또는 weighted_score 2 이상)
             if weighted_score >= 2.0:
